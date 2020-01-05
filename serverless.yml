@@ -1,0 +1,15 @@
+service: imux
+provider:
+  name: aws
+  runtime: python3.8
+plugins:
+  - serverless-wsgi
+functions:
+  web:
+    handler: wsgi_handler.handler
+    events:
+      - http: ANY /
+      - http: ANY /{any+}
+custom:
+  wsgi:
+    app: imux.web.app
