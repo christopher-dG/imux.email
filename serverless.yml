@@ -1,15 +1,102 @@
+# TODO: Make S3 storage work.
 service: imux
+plugins:
+  - serverless-wsgi
+custom:
+  wsgi:
+    app: imux.web.app
+  emailsTopic: ${self:service}-${self:provider.stage}-emails
 provider:
   name: aws
   runtime: python3.8
-plugins:
-  - serverless-wsgi
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+      Resource: !GetAtt accounts.Arn
 functions:
   web:
     handler: wsgi_handler.handler
     events:
       - http: ANY /
       - http: ANY /{any+}
-custom:
-  wsgi:
-    app: imux.web.app
+  forward:
+    handler: imux.email.forward
+    events:
+      - sns:
+          arn: !Ref emails
+          topicName: ${self:custom.emailsTopic}
+  deactivate:
+    handler: imux.accounts.deactivate
+    events:
+      - stream:
+          type: dynamodb
+          arn: !GetAtt accounts.StreamArn
+resources:
+  Resources:
+    ruleset:
+      Type: AWS::SES::ReceiptRuleSet
+    bounce:
+      Type: AWS::SES::ReceiptRule
+      Properties:
+        RuleSetName: !Ref ruleset
+        Rule:
+          Enabled: true
+          Recipients: []
+          Actions:
+            - BounceAction:
+                Message: The recipient email address is no longer active.
+                Sender: deactivated@imux.email
+                SmtpReplyCode: 550
+    emails:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: ${self:custom.emailsTopic}
+    store:
+      Type: AWS::SES::ReceiptRule
+      Properties:
+        RuleSetName: !Ref ruleset
+        After: !Ref bounce
+        Rule:
+          Enabled: true
+          Actions:
+            - SNSAction:
+                TopicArn: !Ref emails
+    intro:
+      Type: AWS::SES::Template
+      Properties:
+        Template:
+          SubjectPart: Subscription Notification
+          HtmlPart: |
+            <p>
+            Hello,
+            <br><br>
+            You have been added as a recipient of shared emails via
+            <a target="_blank" rel="noopener noreferrer" href"="https://imux.email">imux.email</a>.
+            <br>
+            To ensure that you receive messages as reliably as possible,
+            please add {{email}} to your address book.
+            <br>
+            If you believe that you should not have received this notification,
+            please click
+            <a target="_blank" rel="noopener noreferrer" href="{{unsubscribe}}">here</a>
+            to unsubscribe.
+            </p>
+    accounts:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: uuid
+            AttributeType: S
+        KeySchema:
+          - AttributeName: uuid
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+        StreamSpecification:
+          StreamViewType: OLD_IMAGE
+        TimeToLiveSpecification:
+          AttributeName: expires
+          Enabled: true
