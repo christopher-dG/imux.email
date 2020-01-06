@@ -1,11 +1,12 @@
-# TODO: Make S3 storage work.
 service: imux
 plugins:
   - serverless-wsgi
 custom:
+  domain: ${env:DOMAIN, 'imux.email'}
+  emails: ${env:EMAILS_BUCKET, '${self:service}-${self:provider.stage}-emails'}
+  kms: !Join ['', ['arn:aws:kms:${self:provider.region}:', !Ref AWS::AccountId, ':alias/aws/ses']]
   wsgi:
     app: imux.web.app
-  emailsTopic: ${self:service}-${self:provider.stage}-emails
 provider:
   name: aws
   runtime: python3.8
@@ -15,18 +16,33 @@ provider:
         - dynamodb:GetItem
         - dynamodb:PutItem
       Resource: !GetAtt accounts.Arn
+    - Effect: Allow
+      Action: lambda:InvokeFunction
+      Resource: !Join ['', ['arn:aws:lambda:${self:provider.region}:', !Ref AWS::AccountId, ':function:${self:service}-${self:provider.stage}-decrypt']]
+    - Effect: Allow
+      Action: s3:GetObject
+      Resource: arn:aws:s3:::${self:custom.emails}/*
+    - Effect: Allow
+      Action: kms:Decrypt
+      Resource: '*'
 functions:
   web:
     handler: wsgi_handler.handler
     events:
       - http: ANY /
       - http: ANY /{any+}
+  decrypt:
+    runtime: ruby2.5
+    handler: decrypt.handler
+    environment:
+      KMS: ${self:custom.kms}
   forward:
     handler: imux.email.forward
     events:
-      - sns:
-          arn: !Ref emails
-          topicName: ${self:custom.emailsTopic}
+      - s3:
+          bucket: ${self:custom.emails}
+          event: s3:ObjectCreated:*
+          existing: true
   deactivate:
     handler: imux.accounts.deactivate
     events:
@@ -35,24 +51,38 @@ functions:
           arn: !GetAtt accounts.StreamArn
 resources:
   Resources:
+    policy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: ${self:custom.emails}
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Action: s3:PutObject
+              Resource: arn:aws:s3:::${self:custom.emails}/*
+              Sid: ${self:service}-${self:provider.stage}-AllowSESPuts
+              Principal:
+                Service: ses.amazonaws.com
+              Condition:
+                StringEquals:
+                  aws:Referer: !Ref AWS::AccountId
     ruleset:
       Type: AWS::SES::ReceiptRuleSet
+      Properties:
+        RuleSetName: ${self:service}-${self:provider.stage}-ruleset
     bounce:
       Type: AWS::SES::ReceiptRule
       Properties:
         RuleSetName: !Ref ruleset
         Rule:
           Enabled: true
-          Recipients: []
+          Recipients:
+            - bounce@${self:custom.domain}
           Actions:
             - BounceAction:
                 Message: The recipient email address is no longer active.
-                Sender: deactivated@imux.email
+                Sender: deactivated@${self:custom.domain}
                 SmtpReplyCode: 550
-    emails:
-      Type: AWS::SNS::Topic
-      Properties:
-        TopicName: ${self:custom.emailsTopic}
     store:
       Type: AWS::SES::ReceiptRule
       Properties:
@@ -61,8 +91,9 @@ resources:
         Rule:
           Enabled: true
           Actions:
-            - SNSAction:
-                TopicArn: !Ref emails
+            - S3Action:
+                BucketName: ${self:custom.emails}
+                KmsKeyArn: ${self:custom.kms}
     intro:
       Type: AWS::SES::Template
       Properties:

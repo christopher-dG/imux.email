@@ -1,7 +1,7 @@
 .coverage
 .requirements/
-.mypy_cache
-.pytest_cache
+.mypy_cache/
+.pytest_cache/
 .serverless/
 __pycache__/
 htmlcov/
