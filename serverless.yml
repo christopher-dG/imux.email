@@ -23,6 +23,9 @@ provider:
       Action: s3:GetObject
       Resource: arn:aws:s3:::${self:custom.emails}/*
     - Effect: Allow
+      Action: s3:ListBucket
+      Resource: arn:aws:s3:::${self:custom.emails}
+    - Effect: Allow
       Action: kms:Decrypt
       Resource: '*'
     - Effect: Allow
@@ -41,6 +44,8 @@ functions:
       KMS: ${self:custom.kms}
   forward:
     handler: imux.email.forward
+    environment:
+      DECRYPT: ${self:service}-${self:provider.stage}-decrypt
     events:
       - s3:
           bucket: ${self:custom.emails}
@@ -88,9 +93,10 @@ resources:
             - bounce@${self:custom.domain}
           Actions:
             - BounceAction:
-                Message: The recipient email address is no longer active.
                 Sender: deactivated@${self:custom.domain}
+                Message: Mailbox does not exist
                 SmtpReplyCode: 550
+                StatusCode: 5.1.1
     store:
       Type: AWS::SES::ReceiptRule
       Properties:

@@ -13,3 +13,8 @@ Deploy checklist:
 - Reactivate receipt ruleset
 
 (this should probably be scripted)
+
+### TODO
+
+Deal with errors nicely for a single record.
+RIght now, if there are multiple records and the last one fails, the ones that succeeded will still run again.

@@ -1,3 +1,4 @@
+boto3
 black
 flake8
 mypy

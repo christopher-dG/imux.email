@@ -1,16 +1,11 @@
-import boto3
 import json
-import os
 
+from email.message import Message
 from uuid import UUID, uuid4
 
 from typing import Any, Dict, List, Union
 
-BOUNCE = os.getenv("BOUNCE")
-DOMAIN = os.getenv("DOMAIN")
-INTRO = os.getenv("INTRO")
-RULESET = os.getenv("RULESET")
-SES = boto3.client("ses")
+from . import BOUNCE, DOMAIN, INTRO, RULESET, SES
 
 
 class Recipient:
@@ -32,6 +27,14 @@ class Account:
     def new(recipients: List[str]) -> "Account":
         """Create a brand new account."""
         return Account(uuid4(), [Recipient(r) for r in recipients])
+
+    @staticmethod
+    def from_ddb(data: Dict[str, Any]) -> "Account":
+        """Get an account from a DynamoDB GetItem response."""
+        return Account(
+            data["uuid"],
+            [Recipient(r["address"], r["unsubscribe"]) for r in data["recipients"]],
+        )
 
     @staticmethod
     def from_stream(event: Dict[str, Any]) -> "Account":
@@ -68,13 +71,14 @@ class Account:
             Destinations=destinations,
         )
 
+    def forward(self, message: Message) -> None:
+        """Forward an email to each recipient."""
+        print(message.as_string())  # TODO
+
 
 def handler(event: Dict[str, Any], _ctx: Any) -> None:
     print(json.dumps(event, indent=2))
     for r in event["Records"]:
-        # TODO: Deal with errors nicely for a single record.
-        # RIght now, if there are multiple records and the last one fails,
-        # the ones that succeeded will still run again.
         name = r["eventName"]
         ddb = r["dynamodb"]
         if name == "INSERT":
