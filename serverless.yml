@@ -25,6 +25,9 @@ provider:
     - Effect: Allow
       Action: kms:Decrypt
       Resource: '*'
+    - Effect: Allow
+      Action: ses:SendBulkTemplatedEmail
+      Resource: !Join ['', ['arn:aws:ses:${self:provider.region}:', !Ref AWS::AccountId, ':identity/${self:custom.domain}']]
 functions:
   web:
     handler: wsgi_handler.handler
@@ -43,8 +46,13 @@ functions:
           bucket: ${self:custom.emails}
           event: s3:ObjectCreated:*
           existing: true
-  deactivate:
-    handler: imux.accounts.deactivate
+  accounts:
+    handler: imux.accounts.handler
+    environment:
+      BOUNCE: !Ref bounce
+      DOMAIN: ${self:custom.domain}
+      INTRO: !Ref intro
+      RULESET: !Ref ruleset
     events:
       - stream:
           type: dynamodb
@@ -104,14 +112,14 @@ resources:
             Hello,
             <br><br>
             You have been added as a recipient of shared emails via
-            <a target="_blank" rel="noopener noreferrer" href"="https://imux.email">imux.email</a>.
+            <a target="_blank" rel="noopener noreferrer" href="https://${self:custom.domain}">${self:custom.domain}</a>.
             <br>
             To ensure that you receive messages as reliably as possible,
-            please add {{email}} to your address book.
+            please add <b>{{uuid}}@${self:custom.domain}</b> to your address book.
             <br>
             If you believe that you should not have received this notification,
             please click
-            <a target="_blank" rel="noopener noreferrer" href="{{unsubscribe}}">here</a>
+            <a target="_blank" rel="noopener noreferrer" href="https://${self:custom.domain}/unsubscribe/{{uuid}}/{{unsubscribe}}">here</a>
             to unsubscribe.
             </p>
     accounts:
@@ -127,7 +135,7 @@ resources:
           ReadCapacityUnits: 5
           WriteCapacityUnits: 5
         StreamSpecification:
-          StreamViewType: OLD_IMAGE
+          StreamViewType: NEW_AND_OLD_IMAGES
         TimeToLiveSpecification:
           AttributeName: expires
           Enabled: true
