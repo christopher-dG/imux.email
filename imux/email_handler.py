@@ -5,8 +5,8 @@ from email.message import Message
 
 from typing import Any, Dict, Optional
 
-from . import ACCOUNTS, DECRYPT, LAMBDA
-from .accounts import Account
+from . import DECRYPT, LAMBDA
+from .account_manager import Account
 
 
 def forward(event: Dict[str, Any], _ctx: Any) -> None:
@@ -17,11 +17,10 @@ def forward(event: Dict[str, Any], _ctx: Any) -> None:
         if not message:
             return
         uuid = _recipient_uuid(message)
-        resp = ACCOUNTS.get_item(Key={"uuid": uuid})
-        if "Item" not in resp:
+        account = Account.get(uuid)
+        if not account:
             print(f"Account {uuid} not found")
             return
-        account = Account.from_ddb(resp["Item"])
         account.forward(message)
 
 

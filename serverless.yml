@@ -1,15 +1,31 @@
 service: imux
 plugins:
+  - serverless-finch
   - serverless-wsgi
 custom:
+  client:
+    bucketName: ${env:WEBSITE_BUCKET, '${self:service}-${self:provider.stage}-website'}
+    distributionFolder: static
   domain: ${env:DOMAIN, 'imux.email'}
   emails: ${env:EMAILS_BUCKET, '${self:service}-${self:provider.stage}-emails'}
   kms: !Join ['', ['arn:aws:kms:${self:provider.region}:', !Ref AWS::AccountId, ':alias/aws/ses']]
+  owner: ${env:OWNER_EMAIL}
   wsgi:
-    app: imux.web.app
+    app: imux.web_api.app
 provider:
   name: aws
   runtime: python3.8
+  environment:
+    ACCOUNTS: !Ref accounts
+    DECRYPT: ${self:service}-${self:provider.stage}-decrypt
+    DOMAIN: ${self:custom.domain}
+    INTRO: !Ref intro
+    KMS: ${self:custom.kms}
+    ORDERS: !Ref orders
+    RECEIVE: !Ref receive
+    RULESET: !Ref ruleset
+    STRIPE_KEY: ${env:STRIPE_KEY}
+    STRIPE_WEBHOOK: ${env:STRIPE_WEBHOOK}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -32,32 +48,24 @@ provider:
       Action: ses:SendBulkTemplatedEmail
       Resource: !Join ['', ['arn:aws:ses:${self:provider.region}:', !Ref AWS::AccountId, ':identity/${self:custom.domain}']]
 functions:
-  web:
+  api:
     handler: wsgi_handler.handler
+    cors: true
     events:
       - http: ANY /
       - http: ANY /{any+}
   decrypt:
     runtime: ruby2.5
     handler: decrypt.handler
-    environment:
-      KMS: ${self:custom.kms}
   forward:
-    handler: imux.email.forward
-    environment:
-      DECRYPT: ${self:service}-${self:provider.stage}-decrypt
+    handler: imux.email_handler.forward
     events:
       - s3:
           bucket: ${self:custom.emails}
           event: s3:ObjectCreated:*
           existing: true
   accounts:
-    handler: imux.accounts.handler
-    environment:
-      BOUNCE: !Ref bounce
-      DOMAIN: ${self:custom.domain}
-      INTRO: !Ref intro
-      RULESET: !Ref ruleset
+    handler: imux.account_manager.handler
     events:
       - stream:
           type: dynamodb
@@ -83,27 +91,29 @@ resources:
       Type: AWS::SES::ReceiptRuleSet
       Properties:
         RuleSetName: ${self:service}-${self:provider.stage}-ruleset
-    bounce:
+    help:
       Type: AWS::SES::ReceiptRule
       Properties:
         RuleSetName: !Ref ruleset
         Rule:
           Enabled: true
           Recipients:
-            - bounce@${self:custom.domain}
+            - help@imux.email
           Actions:
-            - BounceAction:
-                Sender: deactivated@${self:custom.domain}
-                Message: Mailbox does not exist
-                SmtpReplyCode: 550
-                StatusCode: 5.1.1
-    store:
+            - AddHeaderAction:
+                HeaderName: To
+                HeaderValue: ${self:custom.owner}
+            - StopAction:
+                Scope: RuleSet
+    receive:
       Type: AWS::SES::ReceiptRule
       Properties:
         RuleSetName: !Ref ruleset
-        After: !Ref bounce
+        After: !Ref help
         Rule:
           Enabled: true
+          Recipients:
+            - dummy@imux.email
           Actions:
             - S3Action:
                 BucketName: ${self:custom.emails}
@@ -116,17 +126,20 @@ resources:
           HtmlPart: |
             <p>
             Hello,
-            <br><br>
+            </p>
+            <p>
             You have been added as a recipient of shared emails via
             <a target="_blank" rel="noopener noreferrer" href="https://${self:custom.domain}">${self:custom.domain}</a>.
             <br>
             To ensure that you receive messages as reliably as possible,
             please add <b>{{uuid}}@${self:custom.domain}</b> to your address book.
             <br>
-            If you believe that you should not have received this notification,
-            please click
+            If you believe that you should not have received this notification, click
             <a target="_blank" rel="noopener noreferrer" href="https://${self:custom.domain}/unsubscribe/{{uuid}}/{{unsubscribe}}">here</a>
             to unsubscribe.
+            </p>
+            <p>
+            This is an automated message, please do not reply.
             </p>
     accounts:
       Type: AWS::DynamoDB::Table
@@ -145,3 +158,15 @@ resources:
         TimeToLiveSpecification:
           AttributeName: expires
           Enabled: true
+    orders:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: client_secret
+            AttributeType: S
+        KeySchema:
+          - AttributeName: client_secret
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
