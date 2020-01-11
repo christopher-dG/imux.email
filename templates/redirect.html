@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}{{ super() }} | Redirecting...{% endblock %}
+
+{% block head %}
+<script src="https://js.stripe.com/v3"></script>
+<script>
+  (function() {
+    var stripe = Stripe("{{ STRIPE_PUBLIC_KEY }}");
+    var params = new URLSearchParams(window.location.search);
+    var id = params.get("id");
+    stripe.redirectToCheckout({ sessionId: id }).then(function(result) {
+      if (result.error) {
+        alert(result.error.message);  // TODO
+      }
+    });
+  })();
+</script>
+{% endblock %}
+
+{% block content %}
+Redirecting...
+{% endblock %}

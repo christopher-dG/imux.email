@@ -5,16 +5,10 @@ plugins:
 custom:
   client:
     bucketName: ${env:WEBSITE_BUCKET, '${self:service}-${self:provider.stage}-website'}
-    distributionFolder: static
-    routingRules:
-      - condition:
-          keyPrefixEquals: redirect
-        redirect:
-          replaceKeyWith: redirect.html
-      - condition:
-          keyPrefixEquals: success
-        redirect:
-          replaceKeyWith: success.html
+    objectHeaders:
+      ALL_OBJECTS:
+        - name: Content-Type
+          value: text/html
   domain: ${env:DOMAIN, 'imux.email'}
   emails: ${env:EMAILS_BUCKET, '${self:service}-${self:provider.stage}-emails'}
   kms: !Join ['', ['arn:aws:kms:${self:provider.region}:', !Ref AWS::AccountId, ':alias/aws/ses']]
@@ -33,7 +27,7 @@ provider:
     ORDERS: !Ref orders
     RECEIVE: !Ref receive
     RULESET: !Ref ruleset
-    STRIPE_KEY: ${env:STRIPE_KEY}
+    STRIPE_KEY: ${env:STRIPE_PRIVATE_KEY}
     STRIPE_WEBHOOK: ${env:STRIPE_WEBHOOK}
   iamRoleStatements:
     - Effect: Allow

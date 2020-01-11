@@ -19,6 +19,7 @@ class Order:
     def __init__(
         self, *, id: str, price: int, state: str, recipients: List[str], weeks: int
     ) -> None:
+        self.account: Optional[str] = None
         self.id = id
         self.price = price
         self.state = state
@@ -67,7 +68,7 @@ class Order:
 
     def on_completed(self) -> None:
         account = Account.new(self.recipients, timedelta(weeks=self.weeks))
-        self._update(state=SUCCEEDED)
+        self._update(account=account.uuid, state=SUCCEEDED)
         recipients = ", ".join(recipient.address for recipient in account.recipients)
         n = len(account.recipients)
         print(f"Created new account {account.uuid} for {n} recipients: {recipients}")
@@ -75,6 +76,7 @@ class Order:
     def _put(self) -> None:
         ORDERS.put_item(
             Item={
+                "account": self.account,
                 "id": self.id,
                 "price": self.price,
                 "state": self.state,

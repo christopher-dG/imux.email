@@ -4,5 +4,6 @@
 .pytest_cache/
 .serverless/
 __pycache__/
+client/dist/
 htmlcov/
 node_modules/

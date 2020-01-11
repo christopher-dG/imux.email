@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block head %}
+<script>
+  function addRecipientInput() {
+    const form = document.getElementById("purchaseForm");
+    const submit = document.getElementById("submitButton");
+    const input = document.createElement("input");
+    input.type = "email";
+    input.name = "recipients";
+    form.insertBefore(input, submit);
+    form.insertBefore(document.createElement("br"), submit);
+  }
+</script>
+
+<style>
+  #button {
+    display: inline;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<form id="purchaseForm" method="POST" action="https://api.{{ DOMAIN }}/payments">
+  Weeks:
+  <input type="number" name="weeks" value="1">
+  <br>
+  Recipients:
+  <div id="button" title="Add more recipients">
+    <button type="button" onclick="addRecipientInput()">+</button>
+  </div>
+  <br>
+  <button id="submitButton">Submit</button>
+</form>
+
+<script>addRecipientInput()</script>
+{% endblock %}
