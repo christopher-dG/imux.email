@@ -6,6 +6,15 @@ custom:
   client:
     bucketName: ${env:WEBSITE_BUCKET, '${self:service}-${self:provider.stage}-website'}
     distributionFolder: static
+    routingRules:
+      - condition:
+          keyPrefixEquals: redirect
+        redirect:
+          replaceKeyWith: redirect.html
+      - condition:
+          keyPrefixEquals: success
+        redirect:
+          replaceKeyWith: success.html
   domain: ${env:DOMAIN, 'imux.email'}
   emails: ${env:EMAILS_BUCKET, '${self:service}-${self:provider.stage}-emails'}
   kms: !Join ['', ['arn:aws:kms:${self:provider.region}:', !Ref AWS::AccountId, ':alias/aws/ses']]
@@ -162,10 +171,10 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         AttributeDefinitions:
-          - AttributeName: client_secret
+          - AttributeName: id
             AttributeType: S
         KeySchema:
-          - AttributeName: client_secret
+          - AttributeName: id
             KeyType: HASH
         ProvisionedThroughput:
           ReadCapacityUnits: 5

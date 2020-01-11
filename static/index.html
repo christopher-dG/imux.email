@@ -1,1 +1,42 @@
-Index
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>imux.email</title>
+
+    <script>
+      function addRecipientInput() {
+        const form = document.getElementById("purchaseForm");
+        const submit = document.getElementById("submitButton");
+        const input = document.createElement("input");
+        input.type = "email";
+        input.name = "recipients";
+        form.insertBefore(input, submit);
+        form.insertBefore(document.createElement("br"), submit);
+      }
+    </script>
+
+    <style>
+      #button {
+        display: inline;
+      }
+    </style>
+  </head>
+
+  <body>
+    <form id="purchaseForm" method="POST" action="https://api.imux.email/payments">
+      Weeks:
+      <input type="number" name="weeks" value="1">
+      <br>
+      Recipients:
+      <div id="button" title="Add more recipients">
+        <button type="button" onclick="addRecipientInput()">+</button>
+      </div>
+      <br>
+      <button id="submitButton">Submit</button>
+    </form>
+
+    <script>addRecipientInput()</script>
+  </body>
+</html>
