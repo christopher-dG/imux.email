@@ -1,5 +1,12 @@
 # imux.email
 
+### WIP
+
+This service is not yet online.
+It's getting close though!
+
+##### Deployment Notes
+
 Required stuff:
 
 - Verified domain in SES (`DOMAIN` environment variable)
@@ -15,7 +22,7 @@ Deploy checklist:
 
 (this should probably be scripted)
 
-### TODO
+##### TODO
 
 Deal with errors nicely for a single record.
 RIght now, if there are multiple records and the last one fails, the ones that succeeded will still run again.
