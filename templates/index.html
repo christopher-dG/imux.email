@@ -1,11 +1,11 @@
-{% extends "base.html" %}
+{{define "title"}}Home{{end}}
 
-{% block head %}
+{{define "head"}}
 <script>
   function addRecipientInput() {
-    const form = document.getElementById("purchaseForm");
-    const submit = document.getElementById("submitButton");
-    const input = document.createElement("input");
+    var form = document.getElementById("purchaseForm");
+    var submit = document.getElementById("submitButton");
+    var input = document.createElement("input");
     input.type = "email";
     input.name = "recipients";
     form.insertBefore(input, submit);
@@ -18,10 +18,10 @@
     display: inline;
   }
 </style>
-{% endblock %}
+{{end}}
 
-{% block content %}
-<form id="purchaseForm" method="POST" action="https://api.{{ DOMAIN }}/payments">
+{{define "content"}}
+<form id="purchaseForm" method="POST" action="/payments">
   Weeks:
   <input type="number" name="weeks" value="1">
   <br>
@@ -33,5 +33,23 @@
   <button id="submitButton">Submit</button>
 </form>
 
-<script>addRecipientInput()</script>
-{% endblock %}
+<script>
+  (function () {
+    addRecipientInput()
+
+    var params = new URLSearchParams(window.location.search);
+
+    var message = params.get("message");
+    if (message) {
+      alert(message);  // TODO
+    }
+
+    var cancelled = params.get("cancelled");
+    if (cancelled === "true") {
+      // TODO
+    }
+  })();
+</script>
+{{end}}
+
+{{template "base" .}}

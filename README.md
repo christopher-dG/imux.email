@@ -9,6 +9,7 @@ It's getting close though!
 
 Required stuff:
 
+- Domain set up with hosted zone etc.
 - Verified domain in SES (`DOMAIN` environment variable)
 - Pre-existing S3 bucket (`EMAILS_BUCKET` environment variable)
 - Owner email address for support (`OWNER_EMAIL`) environment variable
@@ -24,5 +25,8 @@ Deploy checklist:
 
 ##### TODO
 
-Deal with errors nicely for a single record.
-RIght now, if there are multiple records and the last one fails, the ones that succeeded will still run again.
+- Automate/streamline deployment.
+- Deal with errors nicely for a single record.
+  RIght now, if there are multiple records and the last one fails, the ones that succeeded will still run again.
+- Tests.
+  At the moment things are changing too fast for proper tests to be worthwhile.

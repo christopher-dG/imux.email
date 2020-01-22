@@ -1,43 +1,31 @@
 service: imux
-plugins:
-  - serverless-finch
-  - serverless-wsgi
+# plugins:
+#   - serverless-domain-manager
 custom:
-  client:
-    bucketName: ${env:WEBSITE_BUCKET, '${self:service}-${self:provider.stage}-website'}
-    objectHeaders:
-      ALL_OBJECTS:
-        - name: Content-Type
-          value: text/html
-  domain: ${env:DOMAIN, 'imux.email'}
+  customDomain:
+    domainName: ${env:DOMAIN, 'imux.email'}
   emails: ${env:EMAILS_BUCKET, '${self:service}-${self:provider.stage}-emails'}
-  kms: !Join ['', ['arn:aws:kms:${self:provider.region}:', !Ref AWS::AccountId, ':alias/aws/ses']]
   owner: ${env:OWNER_EMAIL}
-  wsgi:
-    app: imux.web_api.app
 provider:
   name: aws
-  runtime: python3.8
+  runtime: go1.x
   environment:
-    ACCOUNTS: !Ref accounts
-    DECRYPT: ${self:service}-${self:provider.stage}-decrypt
-    DOMAIN: ${self:custom.domain}
-    INTRO: !Ref intro
-    KMS: ${self:custom.kms}
-    ORDERS: !Ref orders
-    RECEIVE: !Ref receive
-    RULESET: !Ref ruleset
-    STRIPE_KEY: ${env:STRIPE_PRIVATE_KEY}
-    STRIPE_WEBHOOK: ${env:STRIPE_WEBHOOK}
+    ACCOUNTS_TABLE: !Ref accounts
+    DECRYPT_FUNCTION: ${self:service}-${self:provider.stage}-decrypt
+    DOMAIN: ${self:custom.customDomain.domainName}
+    INTRO_TEMPLATE: !Ref intro
+    ORDERS_TABLE: !Ref orders
+    RECEIVE_RULE: !Ref receive
+    RULESET_NAME: !Ref ruleset
+    STRIPE_PRIVATE_KEY: ${env:STRIPE_PRIVATE_KEY}
+    STRIPE_PUBLIC_KEY: ${env:STRIPE_PUBLIC_KEY}
+    STRIPE_WEBHOOK_SECRET: ${env:STRIPE_WEBHOOK_SECRET}
   iamRoleStatements:
     - Effect: Allow
       Action:
         - dynamodb:GetItem
         - dynamodb:PutItem
       Resource: !GetAtt accounts.Arn
-    - Effect: Allow
-      Action: lambda:InvokeFunction
-      Resource: !Join ['', ['arn:aws:lambda:${self:provider.region}:', !Ref AWS::AccountId, ':function:${self:service}-${self:provider.stage}-decrypt']]
     - Effect: Allow
       Action: s3:GetObject
       Resource: arn:aws:s3:::${self:custom.emails}/*
@@ -49,26 +37,24 @@ provider:
       Resource: '*'
     - Effect: Allow
       Action: ses:SendBulkTemplatedEmail
-      Resource: !Join ['', ['arn:aws:ses:${self:provider.region}:', !Ref AWS::AccountId, ':identity/${self:custom.domain}']]
+      Resource: !Join ['', ['arn:aws:ses:${self:provider.region}:', !Ref AWS::AccountId, ':identity/${self:custom.customDomain.domainName}']]
+package:
+  artifact: imux.zip
 functions:
-  api:
-    handler: wsgi_handler.handler
-    cors: true
+  web:
+    handler: imux
     events:
       - http: ANY /
       - http: ANY /{any+}
-  decrypt:
-    runtime: ruby2.5
-    handler: decrypt.handler
   forward:
-    handler: imux.email_handler.forward
+    handler: imux
     events:
       - s3:
           bucket: ${self:custom.emails}
           event: s3:ObjectCreated:*
           existing: true
   accounts:
-    handler: imux.account_manager.handler
+    handler: imux
     events:
       - stream:
           type: dynamodb
@@ -120,7 +106,7 @@ resources:
           Actions:
             - S3Action:
                 BucketName: ${self:custom.emails}
-                KmsKeyArn: ${self:custom.kms}
+                KmsKeyArn: !Join ['', ['arn:aws:kms:${self:provider.region}:', !Ref AWS::AccountId, ':alias/aws/ses']]
     intro:
       Type: AWS::SES::Template
       Properties:
@@ -132,13 +118,13 @@ resources:
             </p>
             <p>
             You have been added as a recipient of shared emails via
-            <a target="_blank" rel="noopener noreferrer" href="https://${self:custom.domain}">${self:custom.domain}</a>.
+            <a target="_blank" rel="noopener noreferrer" href="https://${self:custom.customDomain.domainName}">${self:custom.customDomain.domainName}</a>.
             <br>
             To ensure that you receive messages as reliably as possible,
-            please add <b>{{uuid}}@${self:custom.domain}</b> to your address book.
+            please add <b>{{id}}@${self:custom.customDomain.domainName}</b> to your address book.
             <br>
             If you believe that you should not have received this notification, click
-            <a target="_blank" rel="noopener noreferrer" href="https://${self:custom.domain}/unsubscribe/{{uuid}}/{{unsubscribe}}">here</a>
+            <a target="_blank" rel="noopener noreferrer" href="https://${self:custom.customDomain.domainName}/unsubscribe?id={{id}}&token={{token}}">here</a>
             to unsubscribe.
             </p>
             <p>
@@ -148,10 +134,10 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         AttributeDefinitions:
-          - AttributeName: uuid
+          - AttributeName: id
             AttributeType: S
         KeySchema:
-          - AttributeName: uuid
+          - AttributeName: id
             KeyType: HASH
         ProvisionedThroughput:
           ReadCapacityUnits: 5
