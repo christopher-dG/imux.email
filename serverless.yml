@@ -1,17 +1,21 @@
 service: imux
-# plugins:
-#   - serverless-domain-manager
+plugins:
+  - serverless-domain-manager
 custom:
+  prod:
+    dev: false
+    prod: true
   customDomain:
     domainName: ${env:DOMAIN, 'imux.email'}
-  emails: ${env:EMAILS_BUCKET, '${self:service}-${self:provider.stage}-emails'}
+    enabled: ${self:custom.prod.${self:custom.stage}}
+  emails: ${env:EMAILS_BUCKET, '${self:service}-${self:custom.stage}-emails'}
   owner: ${env:OWNER_EMAIL}
+  stage: ${opt:stage, '${self:provider.stage}'}
 provider:
   name: aws
   runtime: go1.x
   environment:
     ACCOUNTS_TABLE: !Ref accounts
-    DECRYPT_FUNCTION: ${self:service}-${self:provider.stage}-decrypt
     DOMAIN: ${self:custom.customDomain.domainName}
     INTRO_TEMPLATE: !Ref intro
     ORDERS_TABLE: !Ref orders
@@ -70,7 +74,7 @@ resources:
             - Effect: Allow
               Action: s3:PutObject
               Resource: arn:aws:s3:::${self:custom.emails}/*
-              Sid: ${self:service}-${self:provider.stage}-AllowSESPuts
+              Sid: ${self:service}-${self:custom.stage}-AllowSESPuts
               Principal:
                 Service: ses.amazonaws.com
               Condition:
@@ -79,7 +83,7 @@ resources:
     ruleset:
       Type: AWS::SES::ReceiptRuleSet
       Properties:
-        RuleSetName: ${self:service}-${self:provider.stage}-ruleset
+        RuleSetName: ${self:service}-${self:custom.stage}-ruleset
     help:
       Type: AWS::SES::ReceiptRule
       Properties:

@@ -20,7 +20,10 @@ import (
 )
 
 var (
-	templates     = template.Must(template.ParseGlob(filepath.Join("templates", "*.html")))
+	templates = map[string]*template.Template{
+		"index":    loadTemplate("index.html"),
+		"redirect": loadTemplate("redirect.html"),
+	}
 	webhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
 )
 
@@ -136,7 +139,13 @@ func createOrder(w http.ResponseWriter, r *http.Request) {
 
 	recipients := []string{}
 	for _, recipient := range r.PostForm["recipients"] {
-		if strings.Contains(recipient, "@") {
+		if strings.Contains(recipient, fmt.Sprintf("@%s", domain)) {
+			log.Println("Invalid email address:", recipient)
+			redirect(w, r, "/", map[string]string{
+				"message": fmt.Sprintf("Sorry, you can't forward to another %s address.", domain),
+			})
+			return
+		} else if strings.Contains(recipient, "@") {
 			recipients = append(recipients, recipient)
 		} else if len(recipient) > 0 {
 			log.Println("Invalid email address:", recipient)
@@ -224,9 +233,22 @@ func redirect(w http.ResponseWriter, r *http.Request, path string, query map[str
 	http.Redirect(w, r, fmt.Sprintf("%s?%s", path, values.Encode()), http.StatusFound)
 }
 
+func loadTemplate(file string) *template.Template {
+	path := filepath.Join("templates", file)
+	base := filepath.Join("templates", "base.html")
+	return template.Must(template.ParseFiles(path, base))
+}
+
 // render renders a template.
 func render(w http.ResponseWriter, name string, data interface{}) {
-	if err := templates.ExecuteTemplate(w, name, data); err != nil {
+	t, ok := templates[name]
+	if !ok {
+		log.Println("Template does not exist:", name)
+		http.Error(w, "Template not found", http.StatusInternalServerError)
+		return
+	}
+
+	if err := t.Execute(w, data); err != nil {
 		log.Println("Rendering template failed:", err)
 		http.Error(w, "Rendering template failed", http.StatusInternalServerError)
 		return

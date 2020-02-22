@@ -9,8 +9,7 @@ It's getting close though!
 
 Required stuff:
 
-- Domain set up with hosted zone etc.
-- Verified domain in SES (`DOMAIN` environment variable)
+- Domain set up with hosted zone, certificate, verified with SES (domain in `DOMAIN` env variable)
 - Pre-existing S3 bucket (`EMAILS_BUCKET` environment variable)
 - Owner email address for support (`OWNER_EMAIL`) environment variable
 - Set the created receipt ruleset as active
